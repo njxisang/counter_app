@@ -63,4 +63,8 @@ class DateFilterNotifier extends StateNotifier<DateFilterState> {
       customEnd: end,
     );
   }
+
+  void setToday() => setFilter(DateFilter.day);
+  void setWeek() => setFilter(DateFilter.week);
+  void setMonth() => setFilter(DateFilter.month);
 }

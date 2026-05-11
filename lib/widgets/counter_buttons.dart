@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class CounterButtons extends StatelessWidget {
   final Function(int) onDelta;
   final int currentTotal;
+  final VoidCallback? onUndo;
+  final bool canUndo;
 
   const CounterButtons({
     super.key,
     required this.onDelta,
     required this.currentTotal,
+    this.onUndo,
+    this.canUndo = false,
   });
 
   @override
@@ -17,32 +22,48 @@ class CounterButtons extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ElevatedButton(
-              onPressed: () => onDelta(-1),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade100,
-                foregroundColor: Colors.red.shade700,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text('-1', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            _CountButton(
+              label: '-1',
+              color: Colors.red,
+              backgroundColor: Colors.red.shade100,
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                onDelta(-1);
+              },
             ),
-            const SizedBox(width: 16),
-            ElevatedButton(
-              onPressed: () => onDelta(1),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade100,
-                foregroundColor: Colors.green.shade700,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text('+1', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 24),
+            _CountButton(
+              label: '+1',
+              color: Colors.green,
+              backgroundColor: Colors.green.shade100,
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                onDelta(1);
+              },
             ),
           ],
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => _showCustomDeltaDialog(context),
-          icon: const Icon(Icons.add_circle_outline),
-          label: const Text('自定义'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _showCustomDeltaDialog(context),
+              icon: const Icon(Icons.add_circle_outline),
+              label: const Text('自定义'),
+            ),
+            if (canUndo) ...[
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: onUndo,
+                icon: const Icon(Icons.undo),
+                label: const Text('撤销'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange,
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );
@@ -51,47 +72,119 @@ class CounterButtons extends StatelessWidget {
   void _showCustomDeltaDialog(BuildContext context) {
     final controller = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('自定义增减'),
-        content: Form(
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 24,
+        ),
+        child: Form(
           key: formKey,
-          child: TextFormField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(signed: true),
-            decoration: const InputDecoration(
-              labelText: '数值（正数增加，负数减少）',
-              hintText: '例如: 5 或 -3',
-            ),
-            autofocus: true,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return '请输入数值';
-              }
-              if (int.tryParse(value.trim()) == null) {
-                return '请输入有效的整数';
-              }
-              return null;
-            },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '自定义增减',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              TextFormField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: '数值（正数增加，负数减少）',
+                  hintText: '例如: 5 或 -3',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return '请输入数值';
+                  }
+                  if (int.tryParse(value.trim()) == null) {
+                    return '请输入有效的整数';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          final value = int.parse(controller.text.trim());
+                          HapticFeedback.mediumImpact();
+                          onDelta(value);
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const Text('确定'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+      ),
+    );
+  }
+}
+
+class _CountButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color backgroundColor;
+  final VoidCallback onPressed;
+
+  const _CountButton({
+    required this.label,
+    required this.color,
+    required this.backgroundColor,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 100,
+      height: 64,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: color,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                final value = int.parse(controller.text.trim());
-                onDelta(value);
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('确定'),
+          elevation: 2,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: color,
           ),
-        ],
+        ),
       ),
     );
   }

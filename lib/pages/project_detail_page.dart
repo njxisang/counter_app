@@ -57,14 +57,26 @@ class ProjectDetailPage extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: totalAsync.when(
-              data: (total) => CounterButtons(
-                currentTotal: total,
-                onDelta: (delta) {
-                  final newTotal = total + delta;
-                  ref.read(recordsProvider(projectId).notifier).addRecord(delta, newTotal);
-                  ref.invalidate(totalProvider(projectId));
-                },
-              ),
+              data: (total) {
+                final records = recordsAsync.valueOrNull ?? [];
+                final canUndo = records.isNotEmpty;
+                return CounterButtons(
+                  currentTotal: total,
+                  canUndo: canUndo,
+                  onDelta: (delta) {
+                    final newTotal = total + delta;
+                    ref.read(recordsProvider(projectId).notifier).addRecord(delta, newTotal);
+                    ref.invalidate(totalProvider(projectId));
+                  },
+                  onUndo: canUndo
+                      ? () {
+                          final lastRecord = records.first;
+                          ref.read(recordsProvider(projectId).notifier).deleteRecord(lastRecord.id!);
+                          ref.invalidate(totalProvider(projectId));
+                        }
+                      : null,
+                );
+              },
               loading: () => const SizedBox(),
               error: (e, s) => const SizedBox(),
             ),
@@ -78,13 +90,18 @@ class ProjectDetailPage extends ConsumerWidget {
                 const Text('筛选: ', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(width: 8),
                 ...DateFilter.values.map((filter) {
+                  final isSelected = dateFilter.filter == filter;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
-                      label: Text(_getFilterLabel(filter)),
-                      selected: dateFilter.filter == filter,
+                      label: Text(_getFilterLabel(filter, dateFilter)),
+                      selected: isSelected,
                       onSelected: (_) {
-                        ref.read(dateFilterProvider.notifier).setFilter(filter);
+                        if (filter == DateFilter.custom) {
+                          _showDateRangePicker(context, ref, dateFilter);
+                        } else {
+                          ref.read(dateFilterProvider.notifier).setFilter(filter);
+                        }
                       },
                     ),
                   );
@@ -129,9 +146,21 @@ class ProjectDetailPage extends ConsumerWidget {
 
                 if (filteredRecords.isEmpty) {
                   return Center(
-                    child: Text(
-                      '筛选范围内无记录',
-                      style: TextStyle(color: Colors.grey.shade600),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.filter_list_off, size: 48, color: Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        Text(
+                          '筛选范围内无记录',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => ref.read(dateFilterProvider.notifier).setToday(),
+                          child: const Text('查看今日'),
+                        ),
+                      ],
                     ),
                   );
                 }
@@ -159,7 +188,7 @@ class ProjectDetailPage extends ConsumerWidget {
     );
   }
 
-  String _getFilterLabel(DateFilter filter) {
+  String _getFilterLabel(DateFilter filter, DateFilterState state) {
     switch (filter) {
       case DateFilter.day:
         return '今日';
@@ -168,7 +197,41 @@ class ProjectDetailPage extends ConsumerWidget {
       case DateFilter.month:
         return '本月';
       case DateFilter.custom:
+        if (state.filter == DateFilter.custom && state.customStart != null && state.customEnd != null) {
+          final startStr = '${state.customStart!.month}/${state.customStart!.day}';
+          final endStr = '${state.customEnd!.month}/${state.customEnd!.day}';
+          return '$startStr-$endStr';
+        }
         return '自定义';
+    }
+  }
+
+  Future<void> _showDateRangePicker(
+    BuildContext context,
+    WidgetRef ref,
+    DateFilterState currentState,
+  ) async {
+    final now = DateTime.now();
+    final initialStart = currentState.customStart ?? DateTime(now.year, now.month, 1);
+    final initialEnd = currentState.customEnd ?? now;
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now,
+      initialDateRange: DateTimeRange(start: initialStart, end: initialEnd),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme,
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      ref.read(dateFilterProvider.notifier).setCustomRange(picked.start, picked.end);
     }
   }
 }
