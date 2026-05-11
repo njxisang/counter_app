@@ -2,34 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/records_provider.dart';
+import '../providers/projects_provider.dart';
 import '../providers/date_filter_provider.dart';
 import '../widgets/counter_buttons.dart';
 import '../widgets/record_list_tile.dart';
 
-class ProjectDetailPage extends ConsumerWidget {
+class ProjectDetailPage extends ConsumerStatefulWidget {
   final int projectId;
 
   const ProjectDetailPage({super.key, required this.projectId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final recordsAsync = ref.watch(recordsProvider(projectId));
-    final totalAsync = ref.watch(totalProvider(projectId));
+  ConsumerState<ProjectDetailPage> createState() => _ProjectDetailPageState();
+}
+
+class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
+  int _sessionUndoCount = 0;
+
+  static final _projectNameProvider = FutureProvider.family<String, int>((ref, projectId) async {
+    final repository = ref.watch(projectRepositoryProvider);
+    final project = await repository.getById(projectId);
+    return project?.name ?? '计数详情';
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final recordsAsync = ref.watch(recordsProvider(widget.projectId));
+    final totalAsync = ref.watch(totalProvider(widget.projectId));
     final dateFilter = ref.watch(dateFilterProvider);
+    final projectNameAsync = ref.watch(_projectNameProvider(widget.projectId));
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('计数详情'),
+        title: projectNameAsync.when(
+          data: (name) => Text(name),
+          loading: () => const Text('加载中...'),
+          error: (_, _) => const Text('计数详情'),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.bar_chart),
-            onPressed: () => context.push('/project/$projectId/stats'),
+            onPressed: () => context.push('/project/${widget.projectId}/stats'),
           ),
         ],
       ),
       body: Column(
         children: [
-          // Total display
+          // Total display with animation
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -39,12 +58,23 @@ class ProjectDetailPage extends ConsumerWidget {
                 const Text('累计总数', style: TextStyle(fontSize: 16)),
                 const SizedBox(height: 8),
                 totalAsync.when(
-                  data: (total) => Text(
-                    '$total',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                  data: (total) => AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: child,
+                    ),
+                    child: FittedBox(
+                      key: ValueKey(total),
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '$total',
+                        style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                      ),
+                    ),
                   ),
                   loading: () => const CircularProgressIndicator(),
                   error: (e, s) => const Text('Error'),
@@ -59,20 +89,64 @@ class ProjectDetailPage extends ConsumerWidget {
             child: totalAsync.when(
               data: (total) {
                 final records = recordsAsync.valueOrNull ?? [];
-                final canUndo = records.isNotEmpty;
+                final canUndo = records.isNotEmpty || _sessionUndoCount > 0;
                 return CounterButtons(
                   currentTotal: total,
                   canUndo: canUndo,
                   onDelta: (delta) {
                     final newTotal = total + delta;
-                    ref.read(recordsProvider(projectId).notifier).addRecord(delta, newTotal);
-                    ref.invalidate(totalProvider(projectId));
+                    ref.read(recordsProvider(widget.projectId).notifier).addRecord(delta, newTotal);
+                    ref.invalidate(totalProvider(widget.projectId));
+                    setState(() => _sessionUndoCount++);
+                    // SnackBar 提示
+                    final isPositive = delta > 0;
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${isPositive ? '增加' : '减少'} $delta'),
+                        duration: const Duration(milliseconds: 800),
+                        behavior: SnackBarBehavior.floating,
+                        width: 160,
+                      ),
+                    );
                   },
                   onUndo: canUndo
                       ? () {
-                          final lastRecord = records.first;
-                          ref.read(recordsProvider(projectId).notifier).deleteRecord(lastRecord.id!);
-                          ref.invalidate(totalProvider(projectId));
+                          if (_sessionUndoCount > 0) {
+                            // 撤销本次会话的操作
+                            final undoCount = _sessionUndoCount;
+                            for (var i = 0; i < undoCount; i++) {
+                              if (records.isNotEmpty) {
+                                final lastRecord = records[i];
+                                ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(lastRecord.id!);
+                              }
+                            }
+                            ref.invalidate(totalProvider(widget.projectId));
+                            setState(() => _sessionUndoCount = 0);
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('已撤销 $undoCount 步操作'),
+                                duration: const Duration(milliseconds: 800),
+                                behavior: SnackBarBehavior.floating,
+                                width: 200,
+                              ),
+                            );
+                          } else {
+                            // 撤销最近一条历史记录
+                            final lastRecord = records.first;
+                            ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(lastRecord.id!);
+                            ref.invalidate(totalProvider(widget.projectId));
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('已撤销'),
+                                duration: Duration(milliseconds: 800),
+                                behavior: SnackBarBehavior.floating,
+                                width: 120,
+                              ),
+                            );
+                          }
                         }
                       : null,
                 );
@@ -98,7 +172,7 @@ class ProjectDetailPage extends ConsumerWidget {
                       selected: isSelected,
                       onSelected: (_) {
                         if (filter == DateFilter.custom) {
-                          _showDateRangePicker(context, ref, dateFilter);
+                          _showDateRangePicker(context, dateFilter);
                         } else {
                           ref.read(dateFilterProvider.notifier).setFilter(filter);
                         }
@@ -172,8 +246,8 @@ class ProjectDetailPage extends ConsumerWidget {
                     return RecordListTile(
                       record: record,
                       onDelete: () {
-                        ref.read(recordsProvider(projectId).notifier).deleteRecord(record.id!);
-                        ref.invalidate(totalProvider(projectId));
+                        ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(record.id!);
+                        ref.invalidate(totalProvider(widget.projectId));
                       },
                     );
                   },
@@ -208,7 +282,6 @@ class ProjectDetailPage extends ConsumerWidget {
 
   Future<void> _showDateRangePicker(
     BuildContext context,
-    WidgetRef ref,
     DateFilterState currentState,
   ) async {
     final now = DateTime.now();

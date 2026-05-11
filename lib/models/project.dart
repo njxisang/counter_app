@@ -5,12 +5,14 @@ class CounterProject extends Equatable {
   final String name;
   final DateTime createdAt;
   final String? note;
+  final int colorIndex;
 
   const CounterProject({
     this.id,
     required this.name,
     required this.createdAt,
     this.note,
+    this.colorIndex = 0,
   });
 
   CounterProject copyWith({
@@ -18,12 +20,14 @@ class CounterProject extends Equatable {
     String? name,
     DateTime? createdAt,
     String? note,
+    int? colorIndex,
   }) {
     return CounterProject(
       id: id ?? this.id,
       name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
-      note: note,
+      note: note ?? this.note,
+      colorIndex: colorIndex ?? this.colorIndex,
     );
   }
 
@@ -33,6 +37,7 @@ class CounterProject extends Equatable {
       'name': name,
       'created_at': createdAt.toIso8601String(),
       'note': note,
+      'color_index': colorIndex,
     };
   }
 
@@ -42,9 +47,10 @@ class CounterProject extends Equatable {
       name: map['name'] as String,
       createdAt: DateTime.parse(map['created_at'] as String),
       note: map['note'] as String?,
+      colorIndex: map['color_index'] as int? ?? 0,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, createdAt, note];
+  List<Object?> get props => [id, name, createdAt, note, colorIndex];
 }

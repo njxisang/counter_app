@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class CounterButtons extends StatelessWidget {
+class CounterButtons extends StatefulWidget {
   final Function(int) onDelta;
   final int currentTotal;
   final VoidCallback? onUndo;
@@ -16,6 +16,27 @@ class CounterButtons extends StatelessWidget {
   });
 
   @override
+  State<CounterButtons> createState() => _CounterButtonsState();
+}
+
+class _CounterButtonsState extends State<CounterButtons> {
+  String _lastTapped = '';
+
+  void _handleTap(String button) {
+    final now = DateTime.now();
+    if (_lastTapped == button && now.millisecondsSinceEpoch % 10000 < 500) {
+      // 双击：快速再次点击同按钮
+      HapticFeedback.heavyImpact();
+      widget.onDelta(button == 'plus' ? 5 : -5);
+      _lastTapped = '';
+    } else {
+      HapticFeedback.mediumImpact();
+      widget.onDelta(button == 'plus' ? 1 : -1);
+      _lastTapped = button;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -26,20 +47,14 @@ class CounterButtons extends StatelessWidget {
               label: '-1',
               color: Colors.red,
               backgroundColor: Colors.red.shade100,
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                onDelta(-1);
-              },
+              onPressed: () => _handleTap('minus'),
             ),
-            const SizedBox(width: 24),
+            const SizedBox(width: 32),
             _CountButton(
               label: '+1',
               color: Colors.green,
               backgroundColor: Colors.green.shade100,
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                onDelta(1);
-              },
+              onPressed: () => _handleTap('plus'),
             ),
           ],
         ),
@@ -52,10 +67,10 @@ class CounterButtons extends StatelessWidget {
               icon: const Icon(Icons.add_circle_outline),
               label: const Text('自定义'),
             ),
-            if (canUndo) ...[
+            if (widget.canUndo) ...[
               const SizedBox(width: 12),
               OutlinedButton.icon(
-                onPressed: onUndo,
+                onPressed: widget.onUndo,
                 icon: const Icon(Icons.undo),
                 label: const Text('撤销'),
                 style: OutlinedButton.styleFrom(
@@ -131,7 +146,7 @@ class CounterButtons extends StatelessWidget {
                         if (formKey.currentState!.validate()) {
                           final value = int.parse(controller.text.trim());
                           HapticFeedback.mediumImpact();
-                          onDelta(value);
+                          widget.onDelta(value);
                           Navigator.pop(context);
                         }
                       },
@@ -165,8 +180,8 @@ class _CountButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 100,
-      height: 64,
+      width: 120,
+      height: 72,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(

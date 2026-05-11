@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/repositories/project_repository.dart';
 import '../models/project.dart';
 
-enum ProjectSortOrder { name, createdAt, recentCount }
+enum ProjectSortOrder { name, createdAt }
 
 final projectRepositoryProvider = Provider((ref) => ProjectRepository());
 
@@ -32,10 +32,6 @@ final filteredProjectsProvider = Provider<AsyncValue<List<CounterProject>>>((ref
         filtered.sort((a, b) => a.name.compareTo(b.name));
         break;
       case ProjectSortOrder.createdAt:
-        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case ProjectSortOrder.recentCount:
-        // Keep default order (by created_at DESC) - records determine recent activity
         filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         break;
     }
