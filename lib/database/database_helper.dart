@@ -19,17 +19,16 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future migrations go here, e.g.:
-    // if (oldVersion < 2) {
-    //   await db.execute('ALTER TABLE projects ADD COLUMN new_field TEXT');
-    // }
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE projects ADD COLUMN color_index INTEGER DEFAULT 0');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -38,7 +37,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        note TEXT
+        note TEXT,
+        color_index INTEGER DEFAULT 0
       )
     ''');
 
