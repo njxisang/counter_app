@@ -23,7 +23,7 @@ class CounterProject extends Equatable {
       id: id ?? this.id,
       name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
-      note: note ?? this.note,
+      note: note,
     );
   }
 

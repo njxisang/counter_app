@@ -61,7 +61,7 @@ class ProjectCard extends ConsumerWidget {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    error: (_, __) => const Text('Error'),
+                    error: (e, s) => const Text('Error'),
                   ),
                 ],
               ),

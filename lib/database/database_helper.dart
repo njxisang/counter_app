@@ -21,7 +21,15 @@ class DatabaseHelper {
       path,
       version: 1,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Future migrations go here, e.g.:
+    // if (oldVersion < 2) {
+    //   await db.execute('ALTER TABLE projects ADD COLUMN new_field TEXT');
+    // }
   }
 
   Future<void> _createDB(Database db, int version) async {

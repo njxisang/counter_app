@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/records_provider.dart';
 import '../providers/date_filter_provider.dart';
-import '../database/repositories/record_repository.dart';
+import '../providers/records_provider.dart';
 import '../widgets/stats_chart.dart';
 
 class StatsPage extends ConsumerStatefulWidget {
@@ -27,7 +26,7 @@ class _StatsPageState extends ConsumerState<StatsPage> {
 
   Future<void> _loadRecords() async {
     setState(() => _isLoading = true);
-    final repository = RecordRepository();
+    final repository = ref.read(recordRepositoryProvider);
     final dateFilter = ref.read(dateFilterProvider);
     final (start, end) = dateFilter.getDateRange();
     final records = await repository.getByProjectIdAndDateRange(

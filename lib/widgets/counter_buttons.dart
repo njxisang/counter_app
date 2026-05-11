@@ -50,18 +50,31 @@ class CounterButtons extends StatelessWidget {
 
   void _showCustomDeltaDialog(BuildContext context) {
     final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('自定义增减'),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(signed: true),
-          decoration: const InputDecoration(
-            labelText: '数值（正数增加，负数减少）',
-            hintText: '例如: 5 或 -3',
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(signed: true),
+            decoration: const InputDecoration(
+              labelText: '数值（正数增加，负数减少）',
+              hintText: '例如: 5 或 -3',
+            ),
+            autofocus: true,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return '请输入数值';
+              }
+              if (int.tryParse(value.trim()) == null) {
+                return '请输入有效的整数';
+              }
+              return null;
+            },
           ),
-          autofocus: true,
         ),
         actions: [
           TextButton(
@@ -70,8 +83,8 @@ class CounterButtons extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () {
-              final value = int.tryParse(controller.text);
-              if (value != null) {
+              if (formKey.currentState!.validate()) {
+                final value = int.parse(controller.text.trim());
                 onDelta(value);
                 Navigator.pop(context);
               }

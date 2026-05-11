@@ -42,6 +42,9 @@ dependencies:
   sqflite: ^2.3.2
   path: ^1.9.0
 
+  # Equality
+  equatable: ^2.0.5
+
   # Charts
   fl_chart: ^0.66.2
 

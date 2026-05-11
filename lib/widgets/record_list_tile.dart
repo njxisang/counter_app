@@ -21,7 +21,7 @@ class RecordListTile extends StatelessWidget {
 
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: deltaColor.withOpacity(0.2),
+        backgroundColor: deltaColor.withValues(alpha: 0.2),
         child: Icon(
           isPositive ? Icons.arrow_upward : Icons.arrow_downward,
           color: deltaColor,

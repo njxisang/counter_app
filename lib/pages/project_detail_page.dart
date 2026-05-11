@@ -33,7 +33,7 @@ class ProjectDetailPage extends ConsumerWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
-            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
             child: Column(
               children: [
                 const Text('累计总数', style: TextStyle(fontSize: 16)),
@@ -47,7 +47,7 @@ class ProjectDetailPage extends ConsumerWidget {
                         ),
                   ),
                   loading: () => const CircularProgressIndicator(),
-                  error: (_, __) => const Text('Error'),
+                  error: (e, s) => const Text('Error'),
                 ),
               ],
             ),
@@ -66,7 +66,7 @@ class ProjectDetailPage extends ConsumerWidget {
                 },
               ),
               loading: () => const SizedBox(),
-              error: (_, __) => const SizedBox(),
+              error: (e, s) => const SizedBox(),
             ),
           ),
 

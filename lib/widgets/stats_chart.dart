@@ -39,7 +39,7 @@ class StatsChart extends StatelessWidget {
           horizontalInterval: 1,
           getDrawingHorizontalLine: (value) {
             return FlLine(
-              color: Colors.grey.withOpacity(0.2),
+              color: Colors.grey.withValues(alpha: 0.2),
               strokeWidth: 1,
             );
           },
@@ -97,7 +97,7 @@ class StatsChart extends StatelessWidget {
             ),
             belowBarData: BarAreaData(
               show: true,
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
             ),
           ),
         ],
@@ -127,7 +127,7 @@ class StatsChart extends StatelessWidget {
           horizontalInterval: 1,
           getDrawingHorizontalLine: (value) {
             return FlLine(
-              color: Colors.grey.withOpacity(0.2),
+              color: Colors.grey.withValues(alpha: 0.2),
               strokeWidth: 1,
             );
           },

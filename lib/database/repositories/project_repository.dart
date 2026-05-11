@@ -1,4 +1,3 @@
-import 'package:sqflite/sqflite.dart';
 import '../database_helper.dart';
 import '../../models/project.dart';
 
@@ -43,8 +42,7 @@ class ProjectRepository {
 
   Future<int> delete(int id) async {
     final db = await _dbHelper.database;
-    // Delete associated records first
-    await db.delete('records', where: 'project_id = ?', whereArgs: [id]);
+    // CASCADE constraint in DDL handles records deletion automatically
     return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 }
