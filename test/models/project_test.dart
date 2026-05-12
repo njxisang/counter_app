@@ -17,6 +17,7 @@ void main() {
         expect(project.createdAt, tNow);
         expect(project.note, isNull);
         expect(project.colorIndex, 0);
+        expect(project.countMode, CountMode.incremental);
       });
 
       test('creates with all fields', () {
@@ -26,6 +27,7 @@ void main() {
           createdAt: tNow,
           note: 'A note',
           colorIndex: 3,
+          countMode: CountMode.daily,
         );
 
         expect(project.id, 1);
@@ -33,11 +35,17 @@ void main() {
         expect(project.createdAt, tNow);
         expect(project.note, 'A note');
         expect(project.colorIndex, 3);
+        expect(project.countMode, CountMode.daily);
       });
 
       test('colorIndex defaults to 0', () {
         final project = CounterProject(name: 'Test', createdAt: tNow);
         expect(project.colorIndex, 0);
+      });
+
+      test('countMode defaults to incremental', () {
+        final project = CounterProject(name: 'Test', createdAt: tNow);
+        expect(project.countMode, CountMode.incremental);
       });
     });
 
@@ -67,6 +75,14 @@ void main() {
         expect(original.colorIndex, 0); // original unchanged
       });
 
+      test('copies with countMode changed', () {
+        final original = CounterProject(name: 'Test', createdAt: tNow, countMode: CountMode.incremental);
+        final copied = original.copyWith(countMode: CountMode.daily);
+
+        expect(copied.countMode, CountMode.daily);
+        expect(original.countMode, CountMode.incremental); // original unchanged
+      });
+
       test('copyWith preserves all other fields', () {
         final original = CounterProject(
           id: 1,
@@ -74,6 +90,7 @@ void main() {
           createdAt: tNow,
           note: 'Note',
           colorIndex: 2,
+          countMode: CountMode.daily,
         );
         final copied = original.copyWith(name: 'New Name');
 
@@ -82,6 +99,7 @@ void main() {
         expect(copied.createdAt, tNow);
         expect(copied.note, 'Note');
         expect(copied.colorIndex, 2);
+        expect(copied.countMode, CountMode.daily);
       });
 
       test('copyWith with null note clears note', () {
@@ -100,6 +118,7 @@ void main() {
           createdAt: tNow,
           note: 'A note',
           colorIndex: 2,
+          countMode: CountMode.daily,
         );
         final map = project.toMap();
 
@@ -108,6 +127,7 @@ void main() {
         expect(map['created_at'], tNow.toIso8601String());
         expect(map['note'], 'A note');
         expect(map['color_index'], 2);
+        expect(map['count_mode'], CountMode.daily.index);
       });
 
       test('toMap with id (update mode)', () {
@@ -121,11 +141,12 @@ void main() {
         expect(map['id'], 5);
       });
 
-      test('toMap includes colorIndex always', () {
+      test('toMap includes color_index and count_mode always', () {
         final project = CounterProject(name: 'Test', createdAt: tNow);
         final map = project.toMap();
 
         expect(map['color_index'], 0);
+        expect(map['count_mode'], CountMode.incremental.index);
       });
     });
 
@@ -137,6 +158,7 @@ void main() {
           'created_at': '2026-05-11T14:30:00.000',
           'note': 'Loaded note',
           'color_index': 4,
+          'count_mode': CountMode.daily.index,
         };
         final project = CounterProject.fromMap(map);
 
@@ -145,6 +167,7 @@ void main() {
         expect(project.createdAt, DateTime(2026, 5, 11, 14, 30, 0));
         expect(project.note, 'Loaded note');
         expect(project.colorIndex, 4);
+        expect(project.countMode, CountMode.daily);
       });
 
       test('fromMap with missing optional fields', () {
@@ -159,6 +182,7 @@ void main() {
         expect(project.name, 'Minimal');
         expect(project.note, isNull);
         expect(project.colorIndex, 0); // defaults to 0
+        expect(project.countMode, CountMode.incremental); // defaults to incremental
       });
 
       test('fromMap with null note', () {
@@ -180,13 +204,25 @@ void main() {
         };
         final project = CounterProject.fromMap(map);
         expect(project.colorIndex, 0);
+        expect(project.countMode, CountMode.incremental);
+      });
+
+      test('fromMap with missing count_mode (legacy data)', () {
+        final map = {
+          'id': 1,
+          'name': 'Legacy',
+          'created_at': '2026-05-11T14:30:00.000',
+          'color_index': 3,
+        };
+        final project = CounterProject.fromMap(map);
+        expect(project.countMode, CountMode.incremental);
       });
     });
 
     group('equatable props', () {
       test('two projects with same props are equal', () {
-        final a = CounterProject(id: 1, name: 'Same', createdAt: tNow, colorIndex: 2);
-        final b = CounterProject(id: 1, name: 'Same', createdAt: tNow, colorIndex: 2);
+        final a = CounterProject(id: 1, name: 'Same', createdAt: tNow, colorIndex: 2, countMode: CountMode.daily);
+        final b = CounterProject(id: 1, name: 'Same', createdAt: tNow, colorIndex: 2, countMode: CountMode.daily);
         expect(a, equals(b));
       });
 
@@ -202,9 +238,15 @@ void main() {
         expect(a, isNot(equals(b)));
       });
 
+      test('two projects with different countMode are not equal', () {
+        final a = CounterProject(name: 'Test', createdAt: tNow, countMode: CountMode.incremental);
+        final b = CounterProject(name: 'Test', createdAt: tNow, countMode: CountMode.daily);
+        expect(a, isNot(equals(b)));
+      });
+
       test('hashCode consistency for equal objects', () {
-        final a = CounterProject(id: 1, name: 'Test', createdAt: tNow);
-        final b = CounterProject(id: 1, name: 'Test', createdAt: tNow);
+        final a = CounterProject(id: 1, name: 'Test', createdAt: tNow, countMode: CountMode.daily);
+        final b = CounterProject(id: 1, name: 'Test', createdAt: tNow, countMode: CountMode.daily);
         expect(a.hashCode, equals(b.hashCode));
       });
     });
@@ -217,6 +259,7 @@ void main() {
           createdAt: tNow,
           note: 'Preserved',
           colorIndex: 6,
+          countMode: CountMode.daily,
         );
         final restored = CounterProject.fromMap(original.toMap());
 
@@ -228,9 +271,11 @@ void main() {
           name: 'No Note',
           createdAt: tNow,
           note: null,
+          countMode: CountMode.daily,
         );
         final restored = CounterProject.fromMap(original.toMap());
         expect(restored.note, isNull);
+        expect(restored.countMode, CountMode.daily);
       });
     });
   });
