@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../models/project.dart';
 import '../providers/records_provider.dart';
 import '../providers/projects_provider.dart';
 import '../providers/date_filter_provider.dart';
 import '../widgets/counter_buttons.dart';
 import '../widgets/record_list_tile.dart';
+
+final todayTotalProvider = FutureProvider.family<int, int>((ref, projectId) async {
+  final repository = ref.watch(recordRepositoryProvider);
+  final now = DateTime.now();
+  final startOfDay = DateTime(now.year, now.month, now.day);
+  final endOfDay = startOfDay.add(const Duration(days: 1));
+  final records = await repository.getByProjectIdAndDateRange(projectId, startOfDay, endOfDay);
+  return records.fold<int>(0, (sum, r) => sum + r.delta);
+});
 
 class ProjectDetailPage extends ConsumerStatefulWidget {
   final int projectId;
@@ -25,12 +35,19 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
     return project?.name ?? '计数详情';
   });
 
+  static final _projectProvider = FutureProvider.family<CounterProject?, int>((ref, projectId) async {
+    final repository = ref.watch(projectRepositoryProvider);
+    return await repository.getById(projectId);
+  });
+
   @override
   Widget build(BuildContext context) {
     final recordsAsync = ref.watch(recordsProvider(widget.projectId));
     final totalAsync = ref.watch(totalProvider(widget.projectId));
     final dateFilter = ref.watch(dateFilterProvider);
+    final projectAsync = ref.watch(_projectProvider(widget.projectId));
     final projectNameAsync = ref.watch(_projectNameProvider(widget.projectId));
+    final todayTotalAsync = ref.watch(todayTotalProvider(widget.projectId));
 
     return Scaffold(
       appBar: AppBar(
@@ -53,102 +70,124 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-            child: Column(
-              children: [
-                const Text('累计总数', style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 8),
-                totalAsync.when(
-                  data: (total) => AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: animation,
-                      child: child,
+            child: projectAsync.when(
+              data: (project) {
+                final isDaily = project?.countMode == CountMode.daily;
+                final displayTotalAsync = isDaily ? todayTotalAsync : totalAsync;
+                return Column(
+                  children: [
+                    Text(
+                      isDaily ? '今日计数' : '累计总数',
+                      style: const TextStyle(fontSize: 16),
                     ),
-                    child: FittedBox(
-                      key: ValueKey(total),
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '$total',
-                        style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                    const SizedBox(height: 8),
+                    displayTotalAsync.when(
+                      data: (total) => AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, animation) => ScaleTransition(
+                          scale: animation,
+                          child: child,
+                        ),
+                        child: FittedBox(
+                          key: ValueKey(total),
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '$total',
+                            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                          ),
+                        ),
                       ),
+                      loading: () => const CircularProgressIndicator(),
+                      error: (e, s) => const Text('Error'),
                     ),
-                  ),
-                  loading: () => const CircularProgressIndicator(),
-                  error: (e, s) => const Text('Error'),
-                ),
-              ],
+                  ],
+                );
+              },
+              loading: () => const CircularProgressIndicator(),
+              error: (_, __) => const Text('累计总数'),
             ),
           ),
 
           // Counter buttons
           Padding(
             padding: const EdgeInsets.all(16),
-            child: totalAsync.when(
-              data: (total) {
-                final records = recordsAsync.valueOrNull ?? [];
-                final canUndo = records.isNotEmpty || _sessionUndoCount > 0;
-                return CounterButtons(
-                  currentTotal: total,
-                  canUndo: canUndo,
-                  onDelta: (delta) {
-                    final newTotal = total + delta;
-                    ref.read(recordsProvider(widget.projectId).notifier).addRecord(delta, newTotal);
-                    ref.invalidate(totalProvider(widget.projectId));
-                    setState(() => _sessionUndoCount++);
-                    // SnackBar 提示
-                    final isPositive = delta > 0;
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${isPositive ? '增加' : '减少'} $delta'),
-                        duration: const Duration(milliseconds: 800),
-                        behavior: SnackBarBehavior.floating,
-                        width: 160,
-                      ),
-                    );
-                  },
-                  onUndo: canUndo
-                      ? () {
-                          if (_sessionUndoCount > 0) {
-                            // 撤销本次会话的操作
-                            final undoCount = _sessionUndoCount;
-                            for (var i = 0; i < undoCount; i++) {
-                              if (records.isNotEmpty) {
-                                final lastRecord = records[i];
+            child: projectAsync.when(
+              data: (project) {
+                final isDaily = project?.countMode == CountMode.daily;
+                final currentTotalAsync = isDaily ? todayTotalAsync : totalAsync;
+                return currentTotalAsync.when(
+                  data: (total) {
+                    final records = recordsAsync.valueOrNull ?? [];
+                    final canUndo = records.isNotEmpty || _sessionUndoCount > 0;
+                    return CounterButtons(
+                      currentTotal: total,
+                      canUndo: canUndo,
+                      onDelta: (delta) {
+                        final newTotal = total + delta;
+                        ref.read(recordsProvider(widget.projectId).notifier).addRecord(delta, newTotal);
+                        ref.invalidate(totalProvider(widget.projectId));
+                        ref.invalidate(todayTotalProvider(widget.projectId));
+                        setState(() => _sessionUndoCount++);
+                        // SnackBar 提示
+                        final isPositive = delta > 0;
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${isPositive ? '增加' : '减少'} $delta'),
+                            duration: const Duration(milliseconds: 800),
+                            behavior: SnackBarBehavior.floating,
+                            width: 160,
+                          ),
+                        );
+                      },
+                      onUndo: canUndo
+                          ? () {
+                              if (_sessionUndoCount > 0) {
+                                // 撤销本次会话的操作
+                                final undoCount = _sessionUndoCount;
+                                for (var i = 0; i < undoCount; i++) {
+                                  if (records.isNotEmpty) {
+                                    final lastRecord = records[i];
+                                    ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(lastRecord.id!);
+                                  }
+                                }
+                                ref.invalidate(totalProvider(widget.projectId));
+                                ref.invalidate(todayTotalProvider(widget.projectId));
+                                setState(() => _sessionUndoCount = 0);
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('已撤销 $undoCount 步操作'),
+                                    duration: const Duration(milliseconds: 800),
+                                    behavior: SnackBarBehavior.floating,
+                                    width: 200,
+                                  ),
+                                );
+                              } else {
+                                // 撤销最近一条历史记录
+                                final lastRecord = records.first;
                                 ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(lastRecord.id!);
+                                ref.invalidate(totalProvider(widget.projectId));
+                                ref.invalidate(todayTotalProvider(widget.projectId));
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('已撤销'),
+                                    duration: Duration(milliseconds: 800),
+                                    behavior: SnackBarBehavior.floating,
+                                    width: 120,
+                                  ),
+                                );
                               }
                             }
-                            ref.invalidate(totalProvider(widget.projectId));
-                            setState(() => _sessionUndoCount = 0);
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('已撤销 $undoCount 步操作'),
-                                duration: const Duration(milliseconds: 800),
-                                behavior: SnackBarBehavior.floating,
-                                width: 200,
-                              ),
-                            );
-                          } else {
-                            // 撤销最近一条历史记录
-                            final lastRecord = records.first;
-                            ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(lastRecord.id!);
-                            ref.invalidate(totalProvider(widget.projectId));
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('已撤销'),
-                                duration: Duration(milliseconds: 800),
-                                behavior: SnackBarBehavior.floating,
-                                width: 120,
-                              ),
-                            );
-                          }
-                        }
-                      : null,
+                          : null,
+                    );
+                  },
+                  loading: () => const SizedBox(),
+                  error: (e, s) => const SizedBox(),
                 );
               },
               loading: () => const SizedBox(),

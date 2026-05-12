@@ -31,6 +31,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
   bool _isLoading = false;
   CounterProject? _existingProject;
   int _selectedColorIndex = 0;
+  CountMode _selectedCountMode = CountMode.incremental;
 
   bool get isEditing => widget.projectId != null;
 
@@ -51,6 +52,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
         _nameController.text = project.name;
         _noteController.text = project.note ?? '';
         _selectedColorIndex = project.colorIndex;
+        _selectedCountMode = project.countMode;
       });
     }
   }
@@ -73,6 +75,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
           name: _nameController.text.trim(),
           note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
           colorIndex: _selectedColorIndex,
+          countMode: _selectedCountMode,
         );
         await ref.read(projectsProvider.notifier).updateProject(updated);
       } else {
@@ -81,6 +84,7 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
           createdAt: DateTime.now(),
           note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
           colorIndex: _selectedColorIndex,
+          countMode: _selectedCountMode,
         );
         await ref.read(projectsProvider.notifier).addProject(project);
       }
@@ -322,6 +326,35 @@ class _ProjectEditPageState extends ConsumerState<ProjectEditPage> {
               ),
             ),
             const SizedBox(height: 24),
+            const Text('计数方式', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            StatefulBuilder(
+              builder: (context, setModeState) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('每日清零'),
+                      subtitle: Text(
+                        _selectedCountMode == CountMode.daily
+                            ? '每天从零开始统计'
+                            : '累计计数，永不清零',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      value: _selectedCountMode == CountMode.daily,
+                      onChanged: (value) {
+                        setModeState(() {
+                          _selectedCountMode =
+                              value ? CountMode.daily : CountMode.incremental;
+                        });
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _isLoading ? null : _saveProject,
               style: ElevatedButton.styleFrom(

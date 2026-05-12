@@ -25,11 +25,39 @@ class StatsChart extends StatelessWidget {
     );
   }
 
+  /// Build grouped data: date key -> list of records on that day
+  Map<DateTime, List<CounterRecord>> _groupByDate() {
+    final grouped = <DateTime, List<CounterRecord>>{};
+    for (final record in records) {
+      final dateKey = DateTime(record.createdAt.year, record.createdAt.month, record.createdAt.day);
+      grouped.putIfAbsent(dateKey, () => []).add(record);
+    }
+    return grouped;
+  }
+
+  /// Returns label text for a record at the given index.
+  /// - Same-day records: show time (e.g. "13:05")
+  /// - Cross-day records with multiple entries that day: show "5.9 10次"
+  /// - Cross-day records with single entry that day: show "5.9"
+  String _getBottomLabel(int index, Map<DateTime, List<CounterRecord>> grouped) {
+    final record = records[index];
+    final dateKey = DateTime(record.createdAt.year, record.createdAt.month, record.createdAt.day);
+    final dayRecords = grouped[dateKey]!;
+    final isSameDay = dayRecords.length > 1;
+
+    if (isSameDay) {
+      return DateFormat('M.d').format(record.createdAt) + ' ${dayRecords.length}次';
+    } else {
+      return DateFormat('H:mm').format(record.createdAt);
+    }
+  }
+
   Widget _buildLineChart(BuildContext context) {
     final spots = <FlSpot>[];
     for (var i = 0; i < records.length; i++) {
       spots.add(FlSpot(i.toDouble(), records[i].totalAfter.toDouble()));
     }
+    final grouped = _groupByDate();
 
     return LineChart(
       LineChartData(
@@ -68,7 +96,7 @@ class StatsChart extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    DateFormat('MM-dd').format(records[index].createdAt),
+                    _getBottomLabel(index, grouped),
                     style: const TextStyle(fontSize: 10),
                   ),
                 );
@@ -106,8 +134,13 @@ class StatsChart extends StatelessWidget {
             getTooltipItems: (touchedSpots) {
               return touchedSpots.map((spot) {
                 final record = records[spot.spotIndex];
+                final dateKey = DateTime(record.createdAt.year, record.createdAt.month, record.createdAt.day);
+                final dayRecords = grouped[dateKey]!;
+                final label = dayRecords.length > 1
+                    ? '${DateFormat('MM-dd').format(record.createdAt)} ${dayRecords.length}次 ${DateFormat('HH:mm').format(record.createdAt)}'
+                    : DateFormat('MM-dd HH:mm').format(record.createdAt);
                 return LineTooltipItem(
-                  '${DateFormat('MM-dd HH:mm').format(record.createdAt)}\n累计: ${record.totalAfter}',
+                  '$label\n累计: ${record.totalAfter}',
                   const TextStyle(color: Colors.white, fontSize: 12),
                 );
               }).toList();
@@ -119,6 +152,8 @@ class StatsChart extends StatelessWidget {
   }
 
   Widget _buildBarChart(BuildContext context) {
+    final grouped = _groupByDate();
+
     return BarChart(
       BarChartData(
         gridData: FlGridData(
@@ -155,7 +190,7 @@ class StatsChart extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    DateFormat('MM-dd').format(records[index].createdAt),
+                    _getBottomLabel(index, grouped),
                     style: const TextStyle(fontSize: 10),
                   ),
                 );
@@ -184,8 +219,13 @@ class StatsChart extends StatelessWidget {
           touchTooltipData: BarTouchTooltipData(
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final record = records[groupIndex];
+              final dateKey = DateTime(record.createdAt.year, record.createdAt.month, record.createdAt.day);
+              final dayRecords = grouped[dateKey]!;
+              final label = dayRecords.length > 1
+                  ? '${DateFormat('MM-dd').format(record.createdAt)} ${dayRecords.length}次 ${DateFormat('HH:mm').format(record.createdAt)}'
+                  : DateFormat('MM-dd HH:mm').format(record.createdAt);
               return BarTooltipItem(
-                '${DateFormat('MM-dd HH:mm').format(record.createdAt)}\n变化: ${record.delta}',
+                '$label\n变化: ${record.delta}',
                 const TextStyle(color: Colors.white, fontSize: 12),
               );
             },

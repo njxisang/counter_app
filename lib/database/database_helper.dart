@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -28,6 +28,9 @@ class DatabaseHelper {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE projects ADD COLUMN color_index INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE projects ADD COLUMN count_mode INTEGER DEFAULT 0');
     }
   }
 
@@ -38,7 +41,8 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         created_at TEXT NOT NULL,
         note TEXT,
-        color_index INTEGER DEFAULT 0
+        color_index INTEGER DEFAULT 0,
+        count_mode INTEGER DEFAULT 0
       )
     ''');
 
