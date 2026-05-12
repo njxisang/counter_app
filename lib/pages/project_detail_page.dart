@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/project.dart';
+import '../models/record.dart';
 import '../providers/records_provider.dart';
 import '../providers/projects_provider.dart';
 import '../providers/date_filter_provider.dart';
@@ -278,15 +279,30 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
                   );
                 }
 
+                // Group records by day
+                final groupedRecords = <DateTime, List<CounterRecord>>{};
+                for (final r in filteredRecords) {
+                  final dayKey = DateTime(r.createdAt.year, r.createdAt.month, r.createdAt.day);
+                  groupedRecords.putIfAbsent(dayKey, () => []).add(r);
+                }
+                final sortedDays = groupedRecords.keys.toList()
+                  ..sort((a, b) => b.compareTo(a)); // newest first
+
                 return ListView.builder(
-                  itemCount: filteredRecords.length,
+                  itemCount: sortedDays.length,
                   itemBuilder: (context, index) {
-                    final record = filteredRecords[index];
-                    return RecordListTile(
-                      record: record,
-                      onDelete: () {
+                    final dayKey = sortedDays[index];
+                    final dayRecords = groupedRecords[dayKey]!;
+                    final dayTotal = dayRecords.fold<int>(0, (sum, r) => sum + r.delta);
+                    return _DayGroup(
+                      dateKey: dayKey,
+                      records: dayRecords,
+                      dayTotal: dayTotal,
+                      isDailyMode: projectAsync.valueOrNull?.countMode == CountMode.daily,
+                      onDelete: (record) {
                         ref.read(recordsProvider(widget.projectId).notifier).deleteRecord(record.id!);
                         ref.invalidate(totalProvider(widget.projectId));
+                        ref.invalidate(todayTotalProvider(widget.projectId));
                       },
                     );
                   },
@@ -345,5 +361,99 @@ class _ProjectDetailPageState extends ConsumerState<ProjectDetailPage> {
     if (picked != null) {
       ref.read(dateFilterProvider.notifier).setCustomRange(picked.start, picked.end);
     }
+  }
+}
+
+/// A collapsible day group showing date header + list of records
+class _DayGroup extends StatefulWidget {
+  final DateTime dateKey;
+  final List<CounterRecord> records;
+  final int dayTotal;
+  final bool isDailyMode;
+  final void Function(CounterRecord) onDelete;
+
+  const _DayGroup({
+    required this.dateKey,
+    required this.records,
+    required this.dayTotal,
+    required this.isDailyMode,
+    required this.onDelete,
+  });
+
+  @override
+  State<_DayGroup> createState() => _DayGroupState();
+}
+
+class _DayGroupState extends State<_DayGroup> {
+  bool _isExpanded = false;
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    if (date == today) return '今天';
+    if (date == yesterday) return '昨天';
+    return '${date.month}/${date.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dayLabel = _formatDate(widget.dateKey);
+    final isPositive = widget.dayTotal > 0;
+    final deltaColor = isPositive ? Colors.green : Colors.red;
+    final deltaText = isPositive ? '+${widget.dayTotal}' : '${widget.dayTotal}';
+
+    return Column(
+      children: [
+        // Day header (tappable)
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  dayLabel,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: deltaColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    deltaText,
+                    style: TextStyle(
+                      color: deltaColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.records.length} 条记录',
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Expanded record list
+        if (_isExpanded)
+          ...widget.records.map((record) => RecordListTile(
+                record: record,
+                onDelete: () => widget.onDelete(record),
+              )),
+        const Divider(height: 1),
+      ],
+    );
   }
 }
